@@ -1,0 +1,16 @@
+{
+  "name": "script-viral",
+  "version": "1.0.0",
+  "description": "Gerador de Scripts Virais para TikTok Shop",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "export": "next export"
+  },
+  "dependencies": {
+    "next": "latest",
+    "react": "^18",
+    "react-dom": "^18"
+  }
+}

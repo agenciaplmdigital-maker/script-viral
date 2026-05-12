@@ -9,8 +9,9 @@ export default async function handler(req, res) {
 
   try {
     const base64Data = imagemBase64.includes(',') ? imagemBase64.split(',')[1] : imagemBase64;
-    const mediaType = imagemBase64.startsWith('data:image/png') ? 'image/png' : 
-                      imagemBase64.startsWith('data:image/webp') ? 'image/webp' : 'image/jpeg';
+    const mediaType = imagemBase64.startsWith('data:image/png') ? 'image/png' :
+                      imagemBase64.startsWith('data:image/webp') ? 'image/webp' :
+                      imagemBase64.startsWith('data:image/gif') ? 'image/gif' : 'image/jpeg';
 
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -31,15 +32,10 @@ export default async function handler(req, res) {
             },
             {
               type: 'text',
-              text: `Analise esta imagem de produto para TikTok Shop e responda APENAS com um JSON válido, sem markdown, sem explicações:
-{
-  "produto": "nome do produto identificado",
-  "categoria": "uma das opções: organização, maternidade, beleza, eletrônicos, barato→caro, satisfação, moda, esportes, outro",
-  "publicoAlvo": "público-alvo ideal para este produto (ex: Mães 25-45 anos)",
-  "problema": "principal problema que este produto resolve",
-  "beneficio": "principal benefício que o produto oferece",
-  "diferencial": "o que diferencia este produto dos concorrentes"
-}`
+              text: `Analise esta imagem de produto para TikTok Shop. Responda SOMENTE com JSON puro, sem markdown, sem backticks, sem explicações. Exemplo exato do formato:
+{"produto":"nome do produto","categoria":"organização","publicoAlvo":"público ideal","problema":"problema que resolve","beneficio":"benefício principal","diferencial":"diferencial do produto"}
+
+Categorias válidas: organização, maternidade, beleza, eletrônicos, barato→caro, satisfação, moda, esportes, cozinha, pets, outro`
             }
           ]
         }]
@@ -52,11 +48,16 @@ export default async function handler(req, res) {
     }
 
     const data = await response.json();
-    const texto = data.content[0].text.trim();
-    
-    // Limpa possível markdown do JSON
-    const jsonLimpo = texto.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-    const analise = JSON.parse(jsonLimpo);
+    let texto = data.content[0].text.trim();
+
+    // Remove qualquer markdown que o modelo possa ter adicionado
+    texto = texto.replace(/```json\s*/gi, '').replace(/```\s*/gi, '').trim();
+
+    // Extrai o JSON se vier com texto antes/depois
+    const jsonMatch = texto.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error('Resposta da IA não contém JSON válido');
+
+    const analise = JSON.parse(jsonMatch[0]);
 
     return res.status(200).json(analise);
   } catch (err) {

@@ -1,8 +1,17 @@
 export default async function handler(req, res) {
-  if (req.method !== 'POST') return res.status(405).json({ erro: 'Método não permitido' });
+  console.log('📸 Requisição recebida em /api/analisar');
+
+  if (req.method !== 'POST') {
+    return res.status(405).json({ erro: 'Método não permitido' });
+  }
 
   const { imagemBase64 } = req.body;
-  if (!imagemBase64) return res.status(400).json({ erro: 'Imagem não enviada' });
+  if (!imagemBase64) {
+    console.error('❌ Imagem não foi enviada');
+    return res.status(400).json({ erro: 'Imagem não enviada' });
+  }
+
+  console.log('📦 Tamanho do base64:', imagemBase64.length, 'caracteres');
 
   const chaveApi = process.env.ANTHROPIC_API_KEY;
   if (!chaveApi) return res.status(500).json({ erro: 'API Key não configurada no servidor' });

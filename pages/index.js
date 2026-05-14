@@ -34,14 +34,41 @@ export default function Home() {
   const handleUpload = async (e) => {
     const arquivo = e.target.files[0];
     if (!arquivo) return;
-    if (arquivo.size > 5 * 1024 * 1024) { setErro('Imagem muito grande. Máximo 5MB.'); return; }
+
+    console.log('Arquivo recebido:', {
+      nome: arquivo.name,
+      tipo: arquivo.type,
+      tamanho: arquivo.size
+    });
+
+    if (arquivo.size > 5 * 1024 * 1024) {
+      setErro('Imagem muito grande. Máximo 5MB.');
+      return;
+    }
+
+    // Validar tipo de arquivo
+    if (!arquivo.type.startsWith('image/')) {
+      setErro('Arquivo não é uma imagem válida.');
+      return;
+    }
+
     const leitor = new FileReader();
+    leitor.onerror = () => {
+      console.error('Erro ao ler arquivo:', leitor.error);
+      setErro('Erro ao ler a imagem. Tente novamente.');
+    };
     leitor.onload = async (ev) => {
-      const base64 = ev.target.result;
-      setImagemBase64(base64);
-      setPreviewImagem(base64);
-      setErro('');
-      await analisarImagem(base64);
+      try {
+        const base64 = ev.target.result;
+        console.log('Base64 gerado:', base64.slice(0, 100) + '...');
+        setImagemBase64(base64);
+        setPreviewImagem(base64);
+        setErro('');
+        await analisarImagem(base64);
+      } catch (err) {
+        console.error('Erro em handleUpload:', err);
+        setErro('Erro ao processar imagem: ' + err.message);
+      }
     };
     leitor.readAsDataURL(arquivo);
   };

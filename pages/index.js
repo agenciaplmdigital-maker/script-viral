@@ -34,7 +34,7 @@ export default function Home() {
   const handleUpload = async (e) => {
     const arquivo = e.target.files[0];
     if (!arquivo) return;
-    if (arquivo.size > 5 * 1024 * 1024) { setErro('Imagem muito grande. Máximo 5MB.'); return; }
+    if (arquivo.size > 20 * 1024 * 1024) { setErro('Imagem muito grande. Máximo 20MB.'); return; }
     const leitor = new FileReader();
     leitor.onload = async (ev) => {
       const base64 = ev.target.result;

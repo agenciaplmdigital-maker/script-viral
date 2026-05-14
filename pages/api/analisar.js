@@ -5,13 +5,13 @@ export default async function handler(req, res) {
   if (!imagemBase64) return res.status(400).json({ erro: 'Imagem não enviada' });
 
   const chaveApi = process.env.ANTHROPIC_API_KEY;
-  if (!chaveApi) return res.status(500).json({ erro: 'API Key não configurada no servidor' });
+  if (!chaveApi) return res.status(500).json({ erro: 'API Key não configurada' });
 
   try {
     const base64Data = imagemBase64.includes(',') ? imagemBase64.split(',')[1] : imagemBase64;
-    const mediaType = imagemBase64.startsWith('data:image/png') ? 'image/png' :
-                      imagemBase64.startsWith('data:image/webp') ? 'image/webp' :
-                      imagemBase64.startsWith('data:image/gif') ? 'image/gif' : 'image/jpeg';
+    
+    // Força jpeg para qualquer formato (HEIC, HEIF, etc)
+    const mediaType = 'image/jpeg';
 
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -22,46 +22,35 @@ export default async function handler(req, res) {
       },
       body: JSON.stringify({
         model: 'claude-opus-4-5',
-        max_tokens: 1000,
+        max_tokens: 500,
         messages: [{
           role: 'user',
           content: [
-            {
-              type: 'image',
-              source: { type: 'base64', media_type: mediaType, data: base64Data }
-            },
-            {
-              type: 'text',
-              text: `Analise esta imagem de produto para TikTok Shop. Responda SOMENTE com JSON puro, sem markdown, sem backticks, sem explicações. Exemplo exato do formato:
-{"produto":"nome do produto","categoria":"organização","publicoAlvo":"público ideal","problema":"problema que resolve","beneficio":"benefício principal","diferencial":"diferencial do produto"}
-
-Categorias válidas: organização, maternidade, beleza, eletrônicos, barato→caro, satisfação, moda, esportes, cozinha, pets, outro`
-            }
+            { type: 'image', source: { type: 'base64', media_type: mediaType, data: base64Data } },
+            { type: 'text', text: 'Analise este produto. Responda APENAS com JSON puro sem markdown:\n{"produto":"nome","categoria":"outro","publicoAlvo":"público","problema":"problema","beneficio":"beneficio","diferencial":"diferencial"}' }
           ]
         }]
       })
     });
 
-    if (!response.ok) {
-      const err = await response.json();
-      return res.status(response.status).json({ erro: err.error?.message || 'Erro na API Anthropic' });
-    }
-
     const data = await response.json();
-    let texto = data.content[0].text.trim();
+    if (!response.ok) return res.status(200).json({ produto:'', categoria:'outro', publicoAlvo:'', problema:'', beneficio:'', diferencial:'' });
 
-    // Remove qualquer markdown que o modelo possa ter adicionado
-    texto = texto.replace(/```json\s*/gi, '').replace(/```\s*/gi, '').trim();
+    let texto = data.content[0].text.trim().replace(/```json\s*/gi,'').replace(/```\s*/gi,'').trim();
+    const match = texto.match(/\{[\s\S]*\}/);
+    const analise = match ? JSON.parse(match[0]) : {};
 
-    // Extrai o JSON se vier com texto antes/depois
-    const jsonMatch = texto.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) throw new Error('Resposta da IA não contém JSON válido');
+    return res.status(200).json({
+      produto: analise.produto || '',
+      categoria: analise.categoria || 'outro',
+      publicoAlvo: analise.publicoAlvo || '',
+      problema: analise.problema || '',
+      beneficio: analise.beneficio || '',
+      diferencial: analise.diferencial || ''
+    });
 
-    const analise = JSON.parse(jsonMatch[0]);
-
-    return res.status(200).json(analise);
   } catch (err) {
-    console.error('Erro ao analisar:', err);
-    return res.status(500).json({ erro: `Erro ao processar: ${err.message}` });
+    // Sempre retorna campos vazios — usuário preenche manualmente
+    return res.status(200).json({ produto:'', categoria:'outro', publicoAlvo:'', problema:'', beneficio:'', diferencial:'' });
   }
 }

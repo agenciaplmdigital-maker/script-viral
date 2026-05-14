@@ -5,13 +5,12 @@ export default async function handler(req, res) {
   if (!imagemBase64) return res.status(400).json({ erro: 'Imagem não enviada' });
 
   const chaveApi = process.env.ANTHROPIC_API_KEY;
-  if (!chaveApi) return res.status(500).json({ erro: 'API Key não configurada' });
+  if (!chaveApi) return res.status(500).json({ erro: 'API Key não configurada no servidor' });
 
   try {
     const base64Data = imagemBase64.includes(',') ? imagemBase64.split(',')[1] : imagemBase64;
-    
-    // Força jpeg para qualquer formato (HEIC, HEIF, etc)
-    const mediaType = 'image/jpeg';
+    const mediaType = imagemBase64.startsWith('data:image/png') ? 'image/png' : 
+                      imagemBase64.startsWith('data:image/webp') ? 'image/webp' : 'image/jpeg';
 
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -21,36 +20,47 @@ export default async function handler(req, res) {
         'anthropic-version': '2023-06-01'
       },
       body: JSON.stringify({
-        model: 'claude-opus-4-5',
-        max_tokens: 500,
+        model: 'claude-opus-4-7',
+        max_tokens: 1000,
         messages: [{
           role: 'user',
           content: [
-            { type: 'image', source: { type: 'base64', media_type: mediaType, data: base64Data } },
-            { type: 'text', text: 'Analise este produto. Responda APENAS com JSON puro sem markdown:\n{"produto":"nome","categoria":"outro","publicoAlvo":"público","problema":"problema","beneficio":"beneficio","diferencial":"diferencial"}' }
+            {
+              type: 'image',
+              source: { type: 'base64', media_type: mediaType, data: base64Data }
+            },
+            {
+              type: 'text',
+              text: `Analise esta imagem de produto para TikTok Shop e responda APENAS com um JSON válido, sem markdown, sem explicações:
+{
+  "produto": "nome do produto identificado",
+  "categoria": "uma das opções: organização, maternidade, beleza, eletrônicos, barato→caro, satisfação, moda, esportes, outro",
+  "publicoAlvo": "público-alvo ideal para este produto (ex: Mães 25-45 anos)",
+  "problema": "principal problema que este produto resolve",
+  "beneficio": "principal benefício que o produto oferece",
+  "diferencial": "o que diferencia este produto dos concorrentes"
+}`
+            }
           ]
         }]
       })
     });
 
+    if (!response.ok) {
+      const err = await response.json();
+      return res.status(response.status).json({ erro: err.error?.message || 'Erro na API Anthropic' });
+    }
+
     const data = await response.json();
-    if (!response.ok) return res.status(200).json({ produto:'', categoria:'outro', publicoAlvo:'', problema:'', beneficio:'', diferencial:'' });
+    const texto = data.content[0].text.trim();
+    
+    // Limpa possível markdown do JSON
+    const jsonLimpo = texto.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+    const analise = JSON.parse(jsonLimpo);
 
-    let texto = data.content[0].text.trim().replace(/```json\s*/gi,'').replace(/```\s*/gi,'').trim();
-    const match = texto.match(/\{[\s\S]*\}/);
-    const analise = match ? JSON.parse(match[0]) : {};
-
-    return res.status(200).json({
-      produto: analise.produto || '',
-      categoria: analise.categoria || 'outro',
-      publicoAlvo: analise.publicoAlvo || '',
-      problema: analise.problema || '',
-      beneficio: analise.beneficio || '',
-      diferencial: analise.diferencial || ''
-    });
-
+    return res.status(200).json(analise);
   } catch (err) {
-    // Sempre retorna campos vazios — usuário preenche manualmente
-    return res.status(200).json({ produto:'', categoria:'outro', publicoAlvo:'', problema:'', beneficio:'', diferencial:'' });
+    console.error('Erro ao analisar:', err);
+    return res.status(500).json({ erro: `Erro ao processar: ${err.message}` });
   }
 }
